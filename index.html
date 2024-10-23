@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Rocket Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
+        #gameContainer { width: 100%; height: 100vh; }
+        #scoreDisplay { position: absolute; top: 10px; left: 10px; color: white; }
+        #gameOver, #instructions { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: white; background-color: rgba(0,0,0,0.7); padding: 20px; border-radius: 10px; }
+        #restartButton, #startButton { background-color: #4CAF50; border: none; color: white; padding: 15px 32px; text-align: center; text-decoration: none; display: inline-block; font-size: 16px; margin: 4px 2px; cursor: pointer; border-radius: 5px; transition: background-color 0.3s; }
+        #restartButton:hover, #startButton:hover { background-color: #45a049; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer"></div>
+    <div id="scoreDisplay">Score: <span id="score">0</span></div>
+    <div id="gameOver">
+        <h2>Game Over</h2>
+        <p>Your score: <span id="finalScore"></span></p>
+        <button id="restartButton">Restart</button>
+    </div>
+    <div id="instructions">
+        <h2>Welcome to 3D Rocket Game!</h2>
+        <p>Navigate your rocket through space, avoiding asteroids.</p>
+        <p>Use your mouse or touch to move the rocket.</p>
+        <p>Each asteroid you avoid increases your score.</p>
+        <button id="startButton">Start Game</button>
+    </div>
+
+    <script>
+        let scene, camera, renderer, rocket, obstacles = [], score = 0;
+        let gameActive = false;
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('gameContainer').appendChild(renderer.domElement);
+
+            // Rocket
+            const rocketGeometry = new THREE.CylinderGeometry(0.3, 0.5, 2, 32);
+            const noseConeGeometry = new THREE.ConeGeometry(0.5, 1, 32);
+            const rocketMaterial = new THREE.MeshPhongMaterial({ color: 0xcccccc });
+            const rocketBody = new THREE.Mesh(rocketGeometry, rocketMaterial);
+            const noseCone = new THREE.Mesh(noseConeGeometry, rocketMaterial);
+            noseCone.position.y = 1.5;
+            rocket = new THREE.Group();
+            rocket.add(rocketBody);
+            rocket.add(noseCone);
+
+            // Fins
+            const finGeometry = new THREE.BoxGeometry(0.1, 0.5, 0.5);
+            const finMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+            for (let i = 0; i < 4; i++) {
+                const fin = new THREE.Mesh(finGeometry, finMaterial);
+                fin.position.y = -0.75;
+                fin.rotation.y = (Math.PI / 2) * i;
+                fin.position.x = Math.sin((Math.PI / 2) * i) * 0.5;
+                fin.position.z = Math.cos((Math.PI / 2) * i) * 0.5;
+                rocket.add(fin);
+            }
+
+            scene.add(rocket);
+
+            camera.position.z = 5;
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(0, 1, 1);
+            scene.add(directionalLight);
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('touchmove', onTouchMove);
+
+            showInstructions();
+        }
+
+        function onMouseMove(event) {
+            if (!gameActive) return;
+            rocket.position.x = (event.clientX / window.innerWidth) * 4 - 2;
+            rocket.position.y = -(event.clientY / window.innerHeight) * 4 + 2;
+        }
+
+        function onTouchMove(event) {
+            if (!gameActive) return;
+            event.preventDefault();
+            const touch = event.touches[0];
+            rocket.position.x = (touch.clientX / window.innerWidth) * 4 - 2;
+            rocket.position.y = -(touch.clientY / window.innerHeight) * 4 + 2;
+        }
+
+        function createObstacle() {
+            const geometry = new THREE.SphereGeometry(0.5, 32, 32);
+            const material = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
+            const obstacle = new THREE.Mesh(geometry, material);
+            obstacle.position.z = -10;
+            obstacle.position.x = Math.random() * 4 - 2;
+            obstacle.position.y = Math.random() * 4 - 2;
+            scene.add(obstacle);
+            obstacles.push(obstacle);
+        }
+
+        function animate() {
+            if (!gameActive) return;
+            requestAnimationFrame(animate);
+
+            obstacles.forEach((obstacle, index) => {
+                obstacle.position.z += 0.1;
+                if (obstacle.position.z > 5) {
+                    scene.remove(obstacle);
+                    obstacles.splice(index, 1);
+                    score++;
+                    document.getElementById('score').textContent = score;
+                }
+                if (detectCollision(rocket, obstacle)) {
+                    gameOver();
+                }
+            });
+
+            if (Math.random() < 0.02) {
+                createObstacle();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function detectCollision(obj1, obj2) {
+            const distance = obj1.position.distanceTo(obj2.position);
+            return distance < 1;
+        }
+
+        function gameOver() {
+            gameActive = false;
+            document.getElementById('gameOver').style.display = 'block';
+            document.getElementById('finalScore').textContent = score;
+        }
+
+        function restartGame() {
+            score = 0;
+            document.getElementById('score').textContent = score;
+            document.getElementById('gameOver').style.display = 'none';
+            obstacles.forEach(obstacle => scene.remove(obstacle));
+            obstacles = [];
+            rocket.position.set(0, 0, 0);
+            gameActive = true;
+            animate();
+        }
+
+        function showInstructions() {
+            document.getElementById('instructions').style.display = 'block';
+        }
+
+        function startGame() {
+            document.getElementById('instructions').style.display = 'none';
+            gameActive = true;
+            animate();
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        document.getElementById('restartButton').addEventListener('click', restartGame);
+        document.getElementById('startButton').addEventListener('click', startGame);
+
+        init();
+    </script>
+</body>
+</html>
